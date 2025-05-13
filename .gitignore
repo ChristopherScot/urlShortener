@@ -5,3 +5,4 @@ builds/
 *.tfstate*
 *.tfvars*
 *.tfplan.*
+.DS_STORE
