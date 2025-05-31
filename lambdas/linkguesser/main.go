@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"strings"
 
-	"github.com/ChristopherScot/urlShortener/lambdas/linkscrud/util"
+	"github.com/ChristopherScot/urlShortener/shared/util"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
