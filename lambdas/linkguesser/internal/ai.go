@@ -3,7 +3,7 @@ package ai
 import (
 	"context"
 
-	"github.com/ChristopherScot/urlShortener/lambdas/linkscrud/models"
+	"github.com/ChristopherScot/urlShortener/shared/models"
 
 	"github.com/openai/openai-go"
 )
