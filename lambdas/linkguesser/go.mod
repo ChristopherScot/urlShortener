@@ -1,4 +1,4 @@
-module github.com/ChristopherScot/urlShortener/lambdas/getlinks
+module github.com/ChristopherScot/urlShortener/lambdas/linkguesser
 
 go 1.22.2
 
@@ -7,6 +7,8 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.43.1
+	github.com/davecgh/go-spew v1.1.1
+	github.com/openai/openai-go v1.2.0
 )
 
 require (
@@ -22,4 +24,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.19 // indirect
 	github.com/aws/smithy-go v1.22.2 // indirect
+	github.com/tidwall/gjson v1.14.4 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 )

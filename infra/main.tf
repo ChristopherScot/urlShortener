@@ -3,6 +3,12 @@ variable "token" {
   type        = string
 }
 
+variable "OpenAIAPIKey" {
+  description = "Key for OpenAPI integration"
+  type        = string
+}
+
+
 provider "aws" {
   region = "us-east-1"
 
@@ -28,10 +34,14 @@ resource "aws_s3_bucket_public_access_block" "redirects" {
 }
 
 resource "aws_s3_bucket_website_configuration" "redirects" {
-  bucket = aws_s3_bucket.redirects.id
+  bucket = aws_s3_bucket.redirects.id     
 
   index_document {
     suffix = "index.html"
+  }
+
+  error_document {
+    key = "go/404.html"
   }
 }
 
@@ -180,7 +190,14 @@ resource "aws_s3_bucket_policy" "redirects_bucket_policy" {
         Principal = "*"
         Action    = "s3:GetObject"
         Resource  = "${aws_s3_bucket.redirects.arn}/go/*"
-      },
+    },
+    {
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.redirects.arn}/index.html"
+    },
+
     ]
   })
 
@@ -188,6 +205,7 @@ resource "aws_s3_bucket_policy" "redirects_bucket_policy" {
     aws_s3_bucket.redirects, 
     ]
 }
+
 
 resource "aws_iam_role_policy" "lambda_invoke_permissions" {
   name   = "webpage-lambda-invoke-policy"
@@ -206,41 +224,41 @@ resource "aws_iam_role_policy" "lambda_invoke_permissions" {
   })
 }
 
-resource "aws_apigatewayv2_api" "go_links_browser_api" {
+resource "aws_apigatewayv2_api" "go_links_api" {
   name          = "go-links-browser-api"
   protocol_type = "HTTP"
 }
 
 resource "aws_apigatewayv2_integration" "go_links_browser_integration" {
-  api_id             = aws_apigatewayv2_api.go_links_browser_api.id
+  api_id             = aws_apigatewayv2_api.go_links_api.id
   integration_type   = "AWS_PROXY"
   integration_uri    = aws_lambda_function.go_links_browser.invoke_arn
   payload_format_version = "2.0"
 }
 
 resource "aws_apigatewayv2_route" "go_links_browser_route" {
-  api_id    = aws_apigatewayv2_api.go_links_browser_api.id
+  api_id    = aws_apigatewayv2_api.go_links_api.id
   route_key = "GET /"
 
   target = "integrations/${aws_apigatewayv2_integration.go_links_browser_integration.id}"
 }
 
-resource "aws_apigatewayv2_route" "go_links_browser_post_route" {
-  api_id    = aws_apigatewayv2_api.go_links_browser_api.id
+resource "aws_apigatewayv2_route" "go_links_post_route" {
+  api_id    = aws_apigatewayv2_api.go_links_api.id
   route_key = "POST /"
 
   target = "integrations/${aws_apigatewayv2_integration.go_links_browser_integration.id}"
 }
 
-resource "aws_apigatewayv2_route" "go_links_browser_options_route" {
-  api_id    = aws_apigatewayv2_api.go_links_browser_api.id
+resource "aws_apigatewayv2_route" "go_links_options_route" {
+  api_id    = aws_apigatewayv2_api.go_links_api.id
   route_key = "OPTIONS /"
 
   target = "integrations/${aws_apigatewayv2_integration.go_links_browser_integration.id}"
 }
 
-resource "aws_apigatewayv2_stage" "go_links_browser_stage" {
-  api_id      = aws_apigatewayv2_api.go_links_browser_api.id
+resource "aws_apigatewayv2_stage" "go_links_stage" {
+  api_id      = aws_apigatewayv2_api.go_links_api.id
   name        = "$default"
   auto_deploy = true
 }
@@ -250,12 +268,12 @@ resource "aws_lambda_permission" "go_links_browser_permission" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.go_links_browser.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_apigatewayv2_api.go_links_browser_api.execution_arn}/*"
+  source_arn    = "${aws_apigatewayv2_api.go_links_api.execution_arn}/*"
 }
 
 output "go_links_browser_url" {
   description = "The base URL for the go-links-browser web UI"
-  value       = "https://${aws_apigatewayv2_api.go_links_browser_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/"
+  value       = "https://${aws_apigatewayv2_api.go_links_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/"
 }
 
  output "redirects_bucket_website_url" {
@@ -264,3 +282,78 @@ output "go_links_browser_url" {
 }
 
 data "aws_region" "current" {}
+
+resource "aws_lambda_function" "linkguesser" {
+  filename         = "../builds/linkguesser.zip"
+  function_name    = "linkguesser"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "bootstrap"
+  runtime          = "provided.al2023"
+  architectures    = ["arm64"]
+  source_code_hash = filebase64sha256("../builds/linkguesser.zip")
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.redirects.name
+      OPENAI_API_KEY = var.OpenAIAPIKey
+    }
+  }
+}
+
+resource "aws_lambda_permission" "linkguesser_api" {
+  statement_id  = "AllowAPIGatewayInvokeLinkguesser"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.linkguesser.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.go_links_api.execution_arn}/*"
+}
+resource "aws_apigatewayv2_integration" "linkguesser" {
+  api_id                  = aws_apigatewayv2_api.go_links_api.id
+  integration_type        = "AWS_PROXY"
+  integration_uri         = aws_lambda_function.linkguesser.invoke_arn
+  payload_format_version  = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "linkguesser" {
+  api_id    = aws_apigatewayv2_api.go_links_api.id
+  route_key = "GET /linkguesser"
+  target    = "integrations/${aws_apigatewayv2_integration.linkguesser.id}"
+}
+
+resource "aws_s3_object" "redirects_404" {
+  bucket = aws_s3_bucket.redirects.id
+  key    = "go/404.html"
+  content = <<EOF
+<html>
+  <head>
+    <meta http-equiv="refresh" content="0; url=https://${aws_apigatewayv2_api.go_links_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/linkguesser" />
+    <script>
+      var path = window.location.pathname.replace(/^\/go\//, "");
+      window.location.replace("https://${aws_apigatewayv2_api.go_links_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/linkguesser?path=" + encodeURIComponent(path));
+    </script>
+  </head>
+  <body>
+    <p>Redirecting...</p>
+  </body>
+</html>
+EOF
+  content_type = "text/html"
+}
+
+resource "aws_s3_object" "redirects_index" {
+  bucket = aws_s3_bucket.redirects.id
+  key    = "go/index.html"
+  content = <<EOF
+<html>
+  <head>
+    <title>Go Shortener</title>
+    <meta http-equiv="refresh" content="0; url=https://${aws_apigatewayv2_api.go_links_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/" />
+    <script>window.location.replace("https://${aws_apigatewayv2_api.go_links_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/");</script>
+  </head>
+  <body>
+    <p>Redirecting...</p>
+  </body>
+</html>
+EOF
+  content_type = "text/html"
+}
