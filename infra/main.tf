@@ -76,24 +76,6 @@ resource "aws_iam_role_policy_attachment" "lambda_s3_access" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonS3FullAccess"
 }
 
-resource "aws_lambda_function" "create_link" {
-  filename         = "../builds/create_link.zip"
-  function_name    = "create-link"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "bootstrap"
-  runtime          = "provided.al2023"
-  architectures    = ["arm64"]
-
-  source_code_hash = filebase64sha256("../builds/create_link.zip")
-
-  environment {
-    variables = {
-      BUCKET_NAME    = aws_s3_bucket.redirects.bucket
-      DYNAMODB_TABLE = "Redirects"
-      TOKEN          = var.token
-    }
-  }
-}
 
 resource "aws_dynamodb_table" "redirects" {
   name           = "Redirects"
@@ -121,6 +103,9 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
         Effect   = "Allow"
         Action   = [
           "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:BatchGetItem",
         ]
         Resource = aws_dynamodb_table.redirects.arn
       }
@@ -128,24 +113,6 @@ resource "aws_iam_role_policy" "lambda_dynamodb_access" {
   })
 }
 
-# Define the get-links Lambda function
-resource "aws_lambda_function" "get_links" {
-  filename         = "../builds/get_links.zip"
-  function_name    = "get-links"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "bootstrap"
-  runtime          = "provided.al2023"
-  architectures    = ["arm64"]
-
-  source_code_hash = filebase64sha256("../builds/get_links.zip")
-
-  environment {
-    variables = {
-      DYNAMODB_TABLE = aws_dynamodb_table.redirects.name
-      TOKEN               = var.token
-    }
-  }
-}
 
 # Add IAM policy for get-links Lambda to access DynamoDB
 resource "aws_iam_role_policy" "lambda_dynamodb_get_access" {
@@ -165,6 +132,24 @@ resource "aws_iam_role_policy" "lambda_dynamodb_get_access" {
     ]
   })
 }
+resource "aws_lambda_function" "links_crud" {
+  filename         = "../builds/links_crud.zip"
+  function_name    = "links-crud"
+  role             = aws_iam_role.lambda_exec.arn
+  handler          = "bootstrap"
+  runtime          = "provided.al2023"
+  architectures    = ["arm64"]
+
+  source_code_hash = filebase64sha256("../builds/links_crud.zip")
+
+  environment {
+    variables = {
+      BUCKET_NAME    = aws_s3_bucket.redirects.bucket
+      DYNAMODB_TABLE = aws_dynamodb_table.redirects.name
+      TOKEN          = var.token
+    }
+  }
+}
 
 resource "aws_lambda_function" "go_links_browser" {
   filename         = "../builds/go_links_browser.zip" # Path to the zipped Lambda code
@@ -178,8 +163,7 @@ resource "aws_lambda_function" "go_links_browser" {
 
   environment {
     variables = {
-      CREATE_LINK_LAMBDA = aws_lambda_function.create_link.function_name
-      GET_LINKS_LAMBDA   = aws_lambda_function.get_links.function_name
+      LINKS_CRUD_LAMBDA = aws_lambda_function.links_crud.function_name
       TOKEN              = var.token
     }
   }
@@ -215,8 +199,7 @@ resource "aws_iam_role_policy" "lambda_invoke_permissions" {
         Effect   = "Allow"
         Action   = "lambda:InvokeFunction"
         Resource = [
-          aws_lambda_function.create_link.arn,
-          aws_lambda_function.get_links.arn
+          aws_lambda_function.links_crud.arn
         ]
       }
     ]
@@ -269,3 +252,15 @@ resource "aws_lambda_permission" "go_links_browser_permission" {
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.go_links_browser_api.execution_arn}/*"
 }
+
+output "go_links_browser_url" {
+  description = "The base URL for the go-links-browser web UI"
+  value       = "https://${aws_apigatewayv2_api.go_links_browser_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/"
+}
+
+ output "redirects_bucket_website_url" {
+  description = "The S3 website endpoint for redirects"
+  value       = "http://${aws_s3_bucket.redirects.bucket}.s3-website-${data.aws_region.current.name}.amazonaws.com/"
+}
+
+data "aws_region" "current" {}
