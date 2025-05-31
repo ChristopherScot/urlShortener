@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 
+	"github.com/ChristopherScot/urlShortener/lambdas/linkscrud/models"
+	"github.com/ChristopherScot/urlShortener/lambdas/linkscrud/util"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -22,21 +23,14 @@ type Input struct {
 	Creator     string `json:"creator,omitempty"`
 }
 
-type Link struct {
-	Alias       string `json:"alias"`
-	TargetURL   string `json:"target_url"`
-	Description string `json:"description,omitempty"`
-	Creator     string `json:"creator,omitempty"`
-}
-
 type Response struct {
-	Links []Link `json:"links,omitempty"`
-	URL   string `json:"url,omitempty"`
-	Error string `json:"error,omitempty"`
+	Links []models.Link `json:"links,omitempty"`
+	URL   string        `json:"url,omitempty"`
+	Error string        `json:"error,omitempty"`
 }
 
 func handler(ctx context.Context, input Input) (Response, error) {
-	if input.Token != mustGetEnv("TOKEN") {
+	if input.Token != util.MustGetEnv("TOKEN") {
 		return Response{Error: "invalid token"}, nil
 	}
 
@@ -61,7 +55,7 @@ func handler(ctx context.Context, input Input) (Response, error) {
 }
 
 func getLinks(ctx context.Context, cfg aws.Config) (Response, error) {
-	tableName := mustGetEnv("DYNAMODB_TABLE")
+	tableName := util.MustGetEnv("DYNAMODB_TABLE")
 	dynamoClient := dynamodb.NewFromConfig(cfg)
 
 	result, err := dynamoClient.Scan(ctx, &dynamodb.ScanInput{
@@ -71,9 +65,9 @@ func getLinks(ctx context.Context, cfg aws.Config) (Response, error) {
 		return Response{Error: fmt.Sprintf("failed to fetch links from DynamoDB: %v", err)}, nil
 	}
 
-	var links []Link
+	var links []models.Link
 	for _, item := range result.Items {
-		links = append(links, Link{
+		links = append(links, models.Link{
 			Alias:       getAttr(item, "Alias"),
 			TargetURL:   getAttr(item, "TargetURL"),
 			Description: getAttr(item, "Description"),
@@ -84,8 +78,8 @@ func getLinks(ctx context.Context, cfg aws.Config) (Response, error) {
 }
 
 func createLink(ctx context.Context, cfg aws.Config, input Input) (Response, error) {
-	bucket := mustGetEnv("BUCKET_NAME")
-	tableName := mustGetEnv("DYNAMODB_TABLE")
+	bucket := util.MustGetEnv("BUCKET_NAME")
+	tableName := util.MustGetEnv("DYNAMODB_TABLE")
 
 	if input.Alias == "" || input.TargetURL == "" {
 		return Response{Error: "missing required fields"}, nil
@@ -94,7 +88,7 @@ func createLink(ctx context.Context, cfg aws.Config, input Input) (Response, err
 	if input.Alias[:3] != "go/" {
 		return Response{Error: "alias must start with 'go/'"}, nil
 	}
-	
+
 	// S3
 	s3Client := s3.NewFromConfig(cfg)
 	_, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
@@ -131,7 +125,7 @@ func createLink(ctx context.Context, cfg aws.Config, input Input) (Response, err
 }
 
 func updateLink(ctx context.Context, cfg aws.Config, input Input) (Response, error) {
-	tableName := mustGetEnv("DYNAMODB_TABLE")
+	tableName := util.MustGetEnv("DYNAMODB_TABLE")
 	if input.Alias == "" {
 		return Response{Error: "missing alias for update"}, nil
 	}
@@ -159,8 +153,8 @@ func updateLink(ctx context.Context, cfg aws.Config, input Input) (Response, err
 }
 
 func deleteLink(ctx context.Context, cfg aws.Config, input Input) (Response, error) {
-	tableName := mustGetEnv("DYNAMODB_TABLE")
-	bucket := mustGetEnv("BUCKET_NAME")
+	tableName := util.MustGetEnv("DYNAMODB_TABLE")
+	bucket := util.MustGetEnv("BUCKET_NAME")
 	if input.Alias == "" {
 		return Response{Error: "missing alias for delete"}, nil
 	}
@@ -195,14 +189,6 @@ func getAttr(item map[string]types.AttributeValue, key string) string {
 		return v.Value
 	}
 	return ""
-}
-
-func mustGetEnv(key string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		panic(fmt.Sprintf("environment variable %s is required but not set", key))
-	}
-	return value
 }
 
 func main() {
