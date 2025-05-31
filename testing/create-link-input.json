@@ -1,6 +1,6 @@
 {
     "alias": "go/my-alias2",
     "target_url": "https://example.com/2",
-    "token": "your-secure-tokn",
+    "token": "your-secure-token",
     "description": "This is a test link"
 }
