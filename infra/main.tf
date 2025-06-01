@@ -291,6 +291,7 @@ resource "aws_lambda_function" "linkguesser" {
   runtime          = "provided.al2023"
   architectures    = ["arm64"]
   source_code_hash = filebase64sha256("../builds/linkguesser.zip")
+  timeout = 10 
 
   environment {
     variables = {

@@ -5,6 +5,7 @@ tidy:
 	cd lambdas/linksCRUD && go mod tidy
 	cd lambdas/golinksbrowser && go mod tidy
 	cd lambdas/linkguesser && go mod tidy
+	cd shared && go mod tidy
 
 build_golinks_browser:
 	rm -f builds/go_links_browser.zip

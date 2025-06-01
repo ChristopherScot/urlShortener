@@ -1,3 +1,5 @@
+github.com/ChristopherScot/urlShortener/shared v0.0.0-20250531202603-9ab330f16174 h1:u7/coSCQHpkxiqA3HNzbsBa+SAp9BbW+6QD3cIltdHg=
+github.com/ChristopherScot/urlShortener/shared v0.0.0-20250531202603-9ab330f16174/go.mod h1:yYRhC6NULiQl69YD41GWyei9xP68n2oWgb3AaCH5DkI=
 github.com/aws/aws-lambda-go v1.48.0 h1:1aZUYsrJu0yo5fC4z+Rba1KhNImXcJcvHu763BxoyIo=
 github.com/aws/aws-lambda-go v1.48.0/go.mod h1:dpMpZgvWx5vuQJfBt0zqBha60q7Dd7RfgJv23DymV8A=
 github.com/aws/aws-sdk-go-v2 v1.36.3 h1:mJoei2CxPutQVxaATCzDUjcZEjVRdpsiiXi2o38yqWM=
