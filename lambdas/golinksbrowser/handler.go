@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
+	"strings"
 
 	"github.com/ChristopherScot/urlShortener/shared/util"
 	"github.com/aws/aws-lambda-go/events"
@@ -41,7 +42,11 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 
 	token := util.MustGetEnv("TOKEN")
 	// check for the token in the request headers
-	if req.Headers == nil || req.Headers["authorization"] != fmt.Sprintf("Bearer %s", token) {
+	expectedAuthHeader := "Bearer " + token
+
+	// EqualFold is used to compare the header value in a case-insensitive manner which
+	// is required for HTTP headers as they are case-insensitive.
+	if req.Headers == nil || !strings.EqualFold(req.Headers["authorization"], expectedAuthHeader) {
 		return events.APIGatewayProxyResponse{
 			StatusCode: 401,
 			Body:       "Unauthorized: Invalid or missing token",
