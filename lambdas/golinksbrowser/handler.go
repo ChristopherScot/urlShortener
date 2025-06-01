@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
-	"os"
 
+	"github.com/ChristopherScot/urlShortener/shared/util"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -37,8 +37,16 @@ type Link struct {
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayProxyResponse, error) {
-	linksCrudLambda := os.Getenv("LINKS_CRUD_LAMBDA")
-	token := os.Getenv("TOKEN")
+	linksCrudLambda := util.MustGetEnv("LINKS_CRUD_LAMBDA")
+
+	token := util.MustGetEnv("TOKEN")
+	// check for the token in the request headers
+	if req.Headers == nil || req.Headers["authorization"] != fmt.Sprintf("Bearer %s", token) {
+		return events.APIGatewayProxyResponse{
+			StatusCode: 401,
+			Body:       "Unauthorized: Invalid or missing token",
+		}, nil
+	}
 
 	// Handle form submission to add, update, or delete a URL
 	if req.RequestContext.HTTP.Method == "POST" {
