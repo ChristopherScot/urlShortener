@@ -8,7 +8,6 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.36.3
 	github.com/aws/aws-sdk-go-v2/config v1.29.14
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.71.2
-	github.com/davecgh/go-spew v1.1.1
 )
 
 require (
