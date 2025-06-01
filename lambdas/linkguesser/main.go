@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand"
 	"strings"
 
+	ai "github.com/ChristopherScot/urlShortener/lambdas/linkguesser/internal"
+	"github.com/ChristopherScot/urlShortener/shared/models"
 	"github.com/ChristopherScot/urlShortener/shared/util"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -13,15 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/davecgh/go-spew/spew"
 )
-
-type Link struct {
-	Alias       string
-	TargetURL   string
-	Description string
-	Creator     string
-}
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	tableName := util.MustGetEnv("DYNAMODB_TABLE")
@@ -41,21 +34,19 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	links := make([]Link, 0, len(out.Items))
+	links := make([]models.Link, 0, len(out.Items))
 	for _, item := range out.Items {
 		targetURL := getStringAttr(item, "TargetURL")
 		if targetURL == "" {
 			continue // skip if no TargetURL
 		}
-		links = append(links, Link{
+		links = append(links, models.Link{
 			TargetURL:   targetURL,
 			Alias:       getStringAttr(item, "Alias"),
 			Description: getStringAttr(item, "Description"),
 			Creator:     getStringAttr(item, "Creator"),
 		})
 	}
-
-	spew.Dump(links)
 
 	if len(links) == 0 {
 		return events.APIGatewayProxyResponse{
@@ -71,14 +62,21 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	pathSuffix := ""
 	if fullPath != "" {
 		firstSlashIndex := strings.Index(fullPath, "/")
-		pathPrefix = fullPath[:firstSlashIndex]
-		pathSuffix = fullPath[firstSlashIndex:]
+		if firstSlashIndex == -1 {
+			// No slash found, treat the entire fullPath as the prefix
+			pathPrefix = fullPath
+			pathSuffix = ""
+		} else {
+			// Split the path into prefix and suffix
+			pathPrefix = fullPath[:firstSlashIndex]
+			pathSuffix = fullPath[firstSlashIndex:]
+		}
 	}
 
 	target := getTargetIfExists(links, pathPrefix) + pathSuffix
 
 	if target == "" {
-		target = links[rand.Intn(len(links))].TargetURL + pathSuffix
+		target = ai.GetBestGuess(links, fullPath) + pathSuffix
 	}
 
 	return events.APIGatewayProxyResponse{
@@ -102,9 +100,8 @@ func getStringAttr(item map[string]types.AttributeValue, key string) string {
 	return ""
 }
 
-func getTargetIfExists(links []Link, prefix string) string {
+func getTargetIfExists(links []models.Link, prefix string) string {
 	for _, link := range links {
-		log.Printf("Checking link: %s against prefix: %s", link.Alias, prefix)
 		if link.Alias == "go/"+prefix {
 			return link.TargetURL
 		}
